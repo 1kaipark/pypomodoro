@@ -235,7 +235,7 @@ class CursesPomo(object):
                     
                     # refresh screen
                     self.stdscr.refresh()
-
+                    force_render = False
 
 
 
