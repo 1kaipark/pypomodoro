@@ -2,6 +2,8 @@ import time
 import pyfiglet
 import curses
 import argparse
+import random
+import string
 
 from playsound import playsound
 
@@ -15,13 +17,18 @@ REST_TEXT: str = pyfiglet.figlet_format("take a break...", "small")
 
 DING_SFX: str = str(Path(__file__).parent / "assets/ding.wav")
 
+DEVIOUS_LIST: list[str] = (
+    [" "] * 1000 + ["*"] * 2 + ["@", "{", "}", "*", "."]*10 + [c for c in string.ascii_lowercase]
+)
+
+from logger import log
 
 def time_fmt(secs: int, display_hours: bool = False) -> str:
     """Returns base-60 time string in format 00:00.00"""
     h, rm = secs // 3600, secs % 3600
     m = rm // 60
     s = rm % 60
-    disp = [str(v).zfill(2) for v in [h, m, s]]
+    disp = [str(int(v)).zfill(2) for v in [h, m, s]]
 
     if display_hours:
         return "{}:{}:{}".format(*disp)
@@ -53,12 +60,30 @@ class CursesPomo(object):
         curses.use_default_colors()
         curses.init_pair(1, curses.COLOR_RED, -1)
         curses.init_pair(2, curses.COLOR_GREEN, -1)
-        curses.init_pair(3, curses.COLOR_MAGENTA, -1)
+        curses.init_pair(3, curses.COLOR_CYAN, -1)
 
-        self.stdscr.nodelay(True) # non-blocking input
+        self.stdscr.nodelay(True)  # non-blocking input
+
+        self._bg = []
         self.run()
 
-    def add_ascii_str(
+    def render_background(self) -> None:
+        self.h, self.w = self.stdscr.getmaxyx()  # refresh dims
+        bg_h, bg_w = self.h - 1, self.w - 1
+
+        row = random.choices(DEVIOUS_LIST, k=bg_w)
+        self._bg = [row] + self._bg
+
+        if len(self._bg) > bg_h:
+            self._bg = self._bg[:bg_h]
+
+        for i, line in enumerate(self._bg):
+            self.stdscr.addstr(0 + i, 0, "".join(line), curses.color_pair(3))
+
+    def render_background2(self):
+        self.render_ascii_str("HI BRO \n HI BRO", "topright")
+
+    def render_ascii_str(
         self,
         display_ascii: str,
         positioning: Literal["center", "topcenter", "topright", "topleft"] = "center",
@@ -114,50 +139,61 @@ class CursesPomo(object):
         """
         start: float = time.time()  # initialize time
         elapsed: int = 0  # initialize seconds counter
-        active: bool = True # timer state is active or paused
+        active: bool = True  # timer state is active or paused
 
-        force_render: bool = False # so you don't have to wait a second after unpausing, overrides the conditional rendering if true
-        
-        # problem: it's flickering with each render
-        # solution: only update the display when the timestamp actually changes meaningfully
-        # rounded to the nearest second, so refresh at that interval
-        prev_timestamp: str = None # store last displayed timestamp
+        cancel_render: bool = (
+            False  # so you don't have to wait a second after unpausing, overrides the conditional rendering if true
+        )
+
+        prev_timestamp = None
 
         while elapsed < duration:  # go until duration is reached
             key = self.stdscr.getch()
-            if key == ord('p'):
+            if key == ord("p"):
                 active = not active
                 if active:
-                    force_render = True
-                    start += time.time() - (start + elapsed) # grab current time to account for pause time
+                    self.stdscr.clear()
+                    cancel_render = False
+                    start += time.time() - (
+                        start + elapsed
+                    )  # grab current time to account for pause time
                 else:
                     self.stdscr.clear()
-                    self.add_ascii_str(pyfiglet.figlet_format("paused", "small"), "center", color_pair)
-            if key == ord('S'):
+                    cancel_render = True
+                    self.render_ascii_str(
+                        pyfiglet.figlet_format("paused", "small"), "center", color_pair
+                    )
+                    self.stdscr.refresh()
+            if key == ord("S"):
                 self.stdscr.clear()
-                self.add_ascii_str(pyfiglet.figlet_format("skipped", "small"), "center", color_pair)
+                self.render_ascii_str(
+                    pyfiglet.figlet_format("skipped", "small"), "center", color_pair
+                )
                 self.stdscr.refresh()
                 time.sleep(0.4)
-                break # skip this timer
+                break  # skip this timer
 
             if active:
-                elapsed = int(time.time() - start) # update with current time
+                elapsed = round(time.time() - start, 2)  # update with current time
 
             # convert elapsed time in seconds to ASCII display
             if show_elapsed:
-                timestamp = time_fmt(elapsed)
+                timestamp = time_fmt(elapsed)[:10]
             else:
-                timestamp = time_fmt(duration - elapsed)
+                timestamp = time_fmt(round(duration - elapsed, 2))[:10]
 
             display_ascii: list[str] = pyfiglet.figlet_format(timestamp, "slant")
 
             # render time
-            if timestamp != prev_timestamp or force_render:
+            if prev_timestamp != timestamp and not cancel_render:
                 # conditional rendering
                 self.stdscr.clear()
-                self.add_ascii_str(text, "topleft", color_pair)
+                self.render_background()
+                self.render_ascii_str(text, "topleft", color_pair)
 
-                self.add_ascii_str(display_ascii, "center", color_pair | curses.A_BOLD)
+                self.render_ascii_str(
+                    display_ascii, "center", color_pair | curses.A_BOLD
+                )
 
                 # render progress bar
                 self.render_progress_bar(
@@ -167,7 +203,7 @@ class CursesPomo(object):
                 # refresh screen
                 self.stdscr.refresh()
                 prev_timestamp = timestamp
-                force_render = False
+                cancel_render = False
 
     def run(self) -> None:
         """Main timer loop"""
@@ -195,12 +231,15 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-focus",
-        type=int,
+        type=float,
         default=25,
         help="duration of pomodoro focus period in minutes",
     )
     parser.add_argument(
-        "-rest", type=int, default=5, help="duration of pomodoro rest period in minutes"
+        "-rest",
+        type=float,
+        default=5,
+        help="duration of pomodoro rest period in minutes",
     )
     parser.add_argument(
         "-sessions", type=int, default=4, help="number of focus/rest sessions"
@@ -214,5 +253,5 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     curses.wrapper(
-        main, args.focus * 60, args.rest * 60, args.sessions, args.show_elapsed
+        main, int(args.focus * 60), int(args.rest * 60), args.sessions, args.show_elapsed
     )
