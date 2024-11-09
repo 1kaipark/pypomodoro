@@ -180,7 +180,7 @@ class CursesPomo(object):
             if show_elapsed:
                 timestamp = time_fmt(elapsed)[:10]
             else:
-                timestamp = time_fmt(round(duration - elapsed, 2))[:10]
+                timestamp = time_fmt(round(duration - elapsed, 2) + 1)[:10]
 
             display_ascii: list[str] = pyfiglet.figlet_format(timestamp, "slant")
 
