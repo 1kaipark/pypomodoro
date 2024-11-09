@@ -36,6 +36,12 @@ def time_fmt(secs: int, display_hours: bool = False) -> str:
     else:
         return "{}:{}".format(*disp[1:])
     
+def rand_string(character_set, length):
+    """Returns a random string.
+        character_set -- the characters to choose from.
+        length        -- the length of the string.
+    """
+    return "".join(random.choice(character_set) for _ in range(length))
 
 try:
     from playsound import playsound 
@@ -53,7 +59,6 @@ class CursesPomo(object):
         focus_duration: int = 25 * 60,
         rest_duration: int = 5 * 60,
         num_sessions: int = 2,
-        show_elapsed: bool = False,
     ):
         self.stdscr = stdscr
 
@@ -61,7 +66,9 @@ class CursesPomo(object):
         self.rest_duration = rest_duration
         # session counter
         self.num_sessions = num_sessions
-        self.show_elapsed = show_elapsed
+
+
+        self.show_elapsed: bool = False
 
         self.h, self.w = self.stdscr.getmaxyx()
 
@@ -69,35 +76,36 @@ class CursesPomo(object):
         curses.start_color()
         curses.use_default_colors()
         curses.init_pair(1, curses.COLOR_RED, -1)
-        curses.init_pair(2, curses.COLOR_GREEN, -1)
-        curses.init_pair(3, curses.COLOR_CYAN, -1)
+        curses.init_pair(2, curses.COLOR_CYAN, -1)
+        curses.init_pair(3, curses.COLOR_GREEN, -1)
 
         self.stdscr.nodelay(True)  # non-blocking input
 
-        self._bg = []
+        self.dynamic_bg_accumulator = []
+        self.dynamic_bg_frame_counter = 0
+
         self.run()
 
-    def render_background(self) -> None:
+    def render_background_random(self) -> None:
         # if self.stdscr.getmaxyx()[1] < self.w:
-        #     self._bg = [] # clear cached background if the window has become smaller, as this will fail to render
+        #     self.dynamic_bg_accumulator = [] # clear cached background if the window has become smaller, as this will fail to render
 
         self.h, self.w = self.stdscr.getmaxyx()  # refresh dims
         bg_h, bg_w = self.h - 1, self.w - 1
 
-        row = random.choices(DEVIOUS_LIST, k=bg_w)
-        self._bg = [row] + self._bg
+        row = random.choices(string.printable + "｡｢｣､･ｦｧｨｩｪｫｬｭｮｯｰｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝﾞﾟ"*50 + " "*50000, k=bg_w)
 
-        if len(self._bg) > bg_h:
-            self._bg = self._bg[:bg_h]
+        if len(self.dynamic_bg_accumulator) > bg_h:
+            self.dynamic_bg_accumulator = self.dynamic_bg_accumulator[:-1]
+
+        self.dynamic_bg_accumulator = [row] + self.dynamic_bg_accumulator
 
         try:
-            for i, line in enumerate(self._bg):
+            for i, line in enumerate(self.dynamic_bg_accumulator):
                 self.stdscr.addstr(0 + i, 0, "".join(line), curses.color_pair(3))
         except CursesError as e:
-            self._bg = []
-
-    def render_background2(self):
-        self.render_ascii_str("HI BRO \n HI BRO", "topright")
+            # self.dynamic_bg_accumulator = []
+            return
 
     def render_ascii_str(
         self,
@@ -130,7 +138,7 @@ class CursesPomo(object):
             for i, line in enumerate(display_ascii):
                 self.stdscr.addstr(start_y + i, start_x, line, *args)
         except CursesError as e:
-            self.stdscr.clear()
+            pass
 
     def render_progress_bar(self, prop: float = 0.0, end_text: str = "", *args):
         self.h, self.w = self.stdscr.getmaxyx()  # refresh dims
@@ -143,7 +151,7 @@ class CursesPomo(object):
         try:
             self.stdscr.addstr(self.h - 1, 2, bar_disp, *args)
         except CursesError as e:
-            self.stdscr.clear()
+            pass
 
     def timer_loop(
         self,
@@ -160,11 +168,13 @@ class CursesPomo(object):
         elapsed: int = 0  # initialize seconds counter
         active: bool = True  # timer state is active or paused
 
-        force_render: bool = (
-            False  # so you don't have to wait a second after unpausing, overrides the conditional rendering if true
-        )
+        self.stdscr.clear()
+        # render timer
+        # idea from https://github.com/joechrisellis/pmatrix
+        delta = 0
+        lt = start
 
-        prev_timestamp = None
+        force_render = False
 
         while elapsed < duration:  # go until duration is reached
             key = self.stdscr.getch()
@@ -190,42 +200,44 @@ class CursesPomo(object):
                 self.stdscr.refresh()
                 time.sleep(0.4)
                 break  # skip this timer
-            if key == ord("r"):
-                force_render = True
+
             if key == ord("e"):
                 show_elapsed = not show_elapsed
 
             if active:
-                elapsed = round(time.time() - start, 2)  # update with current time
+                now = time.time()
+                elapsed = round(now - start, 2)  # update with current time
+                delta += (now - lt) * 15 # delta accumulates time taken by the last loop cycle
+                # multiply by 15, once delta reaches >= 1, render
+                lt = now
 
-            # convert elapsed time in seconds to ASCII display
-            if show_elapsed:
-                timestamp = time_fmt(elapsed)[:10]
-            else:
-                timestamp = time_fmt(round(duration - elapsed, 2) + 1)[:10]
+                # convert elapsed time in seconds to ASCII display
+                if show_elapsed:
+                    timestamp = time_fmt(elapsed)[:10]
+                else:
+                    timestamp = time_fmt(round(duration - elapsed, 2) + 1)[:10]
 
-            display_ascii: list[str] = pyfiglet.figlet_format(timestamp, "slant")
+                display_ascii: list[str] = pyfiglet.figlet_format(timestamp, "slant")
 
-            # render time
-            if prev_timestamp != timestamp or force_render:
-                # conditional rendering
-                self.stdscr.clear()
-                self.render_background()
-                self.render_ascii_str(text, "topleft", color_pair)
+                if delta >= 1 or force_render:
+                    # conditional rendering
+                    self.render_background_random()
 
-                self.render_ascii_str(
-                    display_ascii, "center", color_pair | curses.A_BOLD
-                )
+                    self.render_ascii_str(text, "topleft", color_pair)
+                    self.render_ascii_str(
+                        display_ascii, "center", color_pair | curses.A_BOLD
+                    )
+                    # render progress bar
+                    self.render_progress_bar(
+                        (elapsed / duration), time_fmt(duration), color_pair
+                    )
+                    delta -= 1
+                    
+                    # refresh screen
+                    self.stdscr.refresh()
 
-                # render progress bar
-                self.render_progress_bar(
-                    (elapsed / duration), time_fmt(duration), color_pair
-                )
 
-                # refresh screen
-                self.stdscr.refresh()
-                prev_timestamp = timestamp
-                force_render = False
+
 
     def run(self) -> None:
         """Main timer loop"""
@@ -245,8 +257,8 @@ class CursesPomo(object):
             except KeyboardInterrupt as e:
                 break
 
-def main(stdscr, focus_duration, rest_duration, num_sessions, show_elapsed) -> None:
-    pomo = CursesPomo(stdscr, focus_duration, rest_duration, num_sessions, show_elapsed)
+def main(stdscr, focus_duration, rest_duration, num_sessions) -> None:
+    pomo = CursesPomo(stdscr, focus_duration, rest_duration, num_sessions)
 
 
 if __name__ == "__main__":
@@ -268,14 +280,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "-sessions", type=int, default=4, help="number of focus/rest sessions"
     )
-    parser.add_argument(
-        "--show_elapsed",
-        default=False,
-        action="store_true",
-        help="show elapsed time in main clock, rather than time remaining",
-    )
 
     args = parser.parse_args()
     curses.wrapper(
-        main, int(args.focus * 60), int(args.rest * 60), args.sessions, args.show_elapsed
+        main, int(args.focus * 60), int(args.rest * 60), args.sessions
     )
