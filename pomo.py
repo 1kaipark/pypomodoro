@@ -19,7 +19,7 @@ REST_TEXT: str = pyfiglet.figlet_format("take a break...", "small")
 DING_SFX: str = str(Path(__file__).parent / "assets/ding.wav")
 
 DEVIOUS_LIST: list[str] = (
-    [" "] * 1000 + ["*"] * 2 + ["@", "{", "}", "*", "."]*10 + [c for c in string.ascii_lowercase]
+    [" "] * 1000 + ["*"] * 2 + ["@", "{", "}", "*", "."]*10 + [c for c in string.ascii_letters]
 )
 
 from logger import log
@@ -35,6 +35,15 @@ def time_fmt(secs: int, display_hours: bool = False) -> str:
         return "{}:{}:{}".format(*disp)
     else:
         return "{}:{}".format(*disp[1:])
+    
+
+try:
+    from playsound import playsound 
+    def play_ding():
+        threading.Thread(target=playsound, args=(DING_SFX,), daemon=True).start()
+except Exception as e:
+    play_ding = lambda : 1
+
 
 
 class CursesPomo(object):
@@ -136,9 +145,6 @@ class CursesPomo(object):
         except CursesError as e:
             self.stdscr.clear()
 
-    def play_ding(self):
-        threading.Thread(target=playsound, args=(DING_SFX,), daemon=True).start()
-
     def timer_loop(
         self,
         duration: int,
@@ -230,7 +236,7 @@ class CursesPomo(object):
                 self.timer_loop(
                     self.focus_duration, FOCUS_TEXT, curses.color_pair(1), self.show_elapsed
                 )
-                self.play_ding()
+                play_ding()
                 # Start rest ...
                 self.timer_loop(
                     self.rest_duration, REST_TEXT, curses.color_pair(2), self.show_elapsed
