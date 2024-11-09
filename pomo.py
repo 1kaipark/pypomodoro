@@ -6,6 +6,7 @@ import random
 import string
 
 from playsound import playsound
+from _curses import error as CursesError
 
 from pathlib import Path
 import threading
@@ -68,6 +69,9 @@ class CursesPomo(object):
         self.run()
 
     def render_background(self) -> None:
+        # if self.stdscr.getmaxyx()[1] < self.w:
+        #     self._bg = [] # clear cached background if the window has become smaller, as this will fail to render
+
         self.h, self.w = self.stdscr.getmaxyx()  # refresh dims
         bg_h, bg_w = self.h - 1, self.w - 1
 
@@ -77,8 +81,11 @@ class CursesPomo(object):
         if len(self._bg) > bg_h:
             self._bg = self._bg[:bg_h]
 
-        for i, line in enumerate(self._bg):
-            self.stdscr.addstr(0 + i, 0, "".join(line), curses.color_pair(3))
+        try:
+            for i, line in enumerate(self._bg):
+                self.stdscr.addstr(0 + i, 0, "".join(line), curses.color_pair(3))
+        except CursesError as e:
+            self._bg = []
 
     def render_background2(self):
         self.render_ascii_str("HI BRO \n HI BRO", "topright")
@@ -110,8 +117,11 @@ class CursesPomo(object):
                 start_x = 0
 
         # write each line to stdscr
-        for i, line in enumerate(display_ascii):
-            self.stdscr.addstr(start_y + i, start_x, line, *args)
+        try:
+            for i, line in enumerate(display_ascii):
+                self.stdscr.addstr(start_y + i, start_x, line, *args)
+        except CursesError as e:
+            self.stdscr.clear()
 
     def render_progress_bar(self, prop: float = 0.0, end_text: str = "", *args):
         self.h, self.w = self.stdscr.getmaxyx()  # refresh dims
@@ -121,7 +131,10 @@ class CursesPomo(object):
         bar: list[str] = ["_"] * bar_len
         bar[:prog] = ["█"] * prog
         bar_disp = "[" + "".join(bar) + "] " + end_text
-        self.stdscr.addstr(self.h - 1, 2, bar_disp, *args)
+        try:
+            self.stdscr.addstr(self.h - 1, 2, bar_disp, *args)
+        except CursesError as e:
+            self.stdscr.clear()
 
     def play_ding(self):
         threading.Thread(target=playsound, args=(DING_SFX,), daemon=True).start()
@@ -212,16 +225,18 @@ class CursesPomo(object):
         curses.curs_set(0)  # hide cursor
 
         for _ in range(self.num_sessions):
-            # Start focus session ----
-            self.timer_loop(
-                self.focus_duration, FOCUS_TEXT, curses.color_pair(1), self.show_elapsed
-            )
-            self.play_ding()
-            # Start rest ...
-            self.timer_loop(
-                self.rest_duration, REST_TEXT, curses.color_pair(2), self.show_elapsed
-            )
-
+            try:
+                # Start focus session ----
+                self.timer_loop(
+                    self.focus_duration, FOCUS_TEXT, curses.color_pair(1), self.show_elapsed
+                )
+                self.play_ding()
+                # Start rest ...
+                self.timer_loop(
+                    self.rest_duration, REST_TEXT, curses.color_pair(2), self.show_elapsed
+                )
+            except KeyboardInterrupt as e:
+                break
 
 def main(stdscr, focus_duration, rest_duration, num_sessions, show_elapsed) -> None:
     pomo = CursesPomo(stdscr, focus_duration, rest_duration, num_sessions, show_elapsed)
