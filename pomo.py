@@ -163,14 +163,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "-focus",
         type=int,
-        default=25*60,
-        help="duration of pomodoro focus period",
+        default=25,
+        help="duration of pomodoro focus period in minutes",
     )
     parser.add_argument(
         "-rest",
         type=int,
         default=5*60,
-        help="duration of pomodoro rest period"
+        help="duration of pomodoro rest period in minutes"
     )
     parser.add_argument(
         "-sessions",
@@ -180,4 +180,4 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    curses.wrapper(main, args.focus, args.rest, args.sessions)
+    curses.wrapper(main, args.focus*60, args.rest*60, args.sessions)
