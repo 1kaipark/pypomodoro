@@ -50,7 +50,10 @@ try:
 except Exception as e:
     play_ding = lambda : 1
 
-
+BACKGROUND_CHARSETS: dict = {
+    "matrix": string.printable + "｡｢｣､･ｦｧｨｩｪｫｬｭｮｯｰｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝﾞﾟ"*50 + " "*50000,
+    "snow": ".*                         "
+}
 
 class CursesPomo(object):
     def __init__(
@@ -86,14 +89,14 @@ class CursesPomo(object):
 
         self.run()
 
-    def render_background_random(self) -> None:
+    def render_background_random(self, char_set: Literal["matrix", "snow"] = "snow") -> None:
         # if self.stdscr.getmaxyx()[1] < self.w:
         #     self.dynamic_bg_accumulator = [] # clear cached background if the window has become smaller, as this will fail to render
 
         self.h, self.w = self.stdscr.getmaxyx()  # refresh dims
         bg_h, bg_w = self.h - 1, self.w - 1
 
-        row = random.choices(string.printable + "｡｢｣､･ｦｧｨｩｪｫｬｭｮｯｰｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝﾞﾟ"*50 + " "*50000, k=bg_w)
+        row = random.choices(BACKGROUND_CHARSETS[char_set], k=bg_w)
 
         if len(self.dynamic_bg_accumulator) > bg_h:
             self.dynamic_bg_accumulator = self.dynamic_bg_accumulator[:-1]
