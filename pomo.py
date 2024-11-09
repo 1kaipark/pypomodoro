@@ -172,6 +172,8 @@ class CursesPomo(object):
                 self.stdscr.refresh()
                 time.sleep(0.4)
                 break  # skip this timer
+            if key == ord("e"):
+                show_elapsed = not show_elapsed
 
             if active:
                 elapsed = round(time.time() - start, 2)  # update with current time
