@@ -8,6 +8,7 @@
     * `p`: pauses timer
     * `S`: skips current timer
     * `e`: switch clock display (time elapsed vs. time remaining)
+    * `r`: forces window refresh (usually useless but fun background scrolling)
     * writing a quit hotkey is a pain in the ass so I just Ctrl+C it lmao
 ## todos:
 * make it prettier

@@ -160,7 +160,7 @@ class CursesPomo(object):
         elapsed: int = 0  # initialize seconds counter
         active: bool = True  # timer state is active or paused
 
-        cancel_render: bool = (
+        force_render: bool = (
             False  # so you don't have to wait a second after unpausing, overrides the conditional rendering if true
         )
 
@@ -172,13 +172,12 @@ class CursesPomo(object):
                 active = not active
                 if active:
                     self.stdscr.clear()
-                    cancel_render = False
+                    force_render = True
                     start += time.time() - (
                         start + elapsed
                     )  # grab current time to account for pause time
                 else:
                     self.stdscr.clear()
-                    cancel_render = True
                     self.render_ascii_str(
                         pyfiglet.figlet_format("paused", "small"), "center", color_pair
                     )
@@ -191,6 +190,8 @@ class CursesPomo(object):
                 self.stdscr.refresh()
                 time.sleep(0.4)
                 break  # skip this timer
+            if key == ord("r"):
+                force_render = True
             if key == ord("e"):
                 show_elapsed = not show_elapsed
 
@@ -206,7 +207,7 @@ class CursesPomo(object):
             display_ascii: list[str] = pyfiglet.figlet_format(timestamp, "slant")
 
             # render time
-            if prev_timestamp != timestamp and not cancel_render:
+            if prev_timestamp != timestamp or force_render:
                 # conditional rendering
                 self.stdscr.clear()
                 self.render_background()
@@ -224,7 +225,7 @@ class CursesPomo(object):
                 # refresh screen
                 self.stdscr.refresh()
                 prev_timestamp = timestamp
-                cancel_render = False
+                force_render = False
 
     def run(self) -> None:
         """Main timer loop"""
