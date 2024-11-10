@@ -15,7 +15,7 @@ from typing import Literal
 
 FOCUS_TEXT: str = pyfiglet.figlet_format("focus...", "small")
 REST_TEXT: str = pyfiglet.figlet_format("take a break...", "small")
-
+LB_TEXT: str = pyfiglet.figlet_format("relax...", "small")
 DING_SFX: str = str(Path(__file__).parent / "assets/ding.wav")
 
 DEVIOUS_LIST: list[str] = (
@@ -61,13 +61,17 @@ class CursesPomo(object):
         stdscr,
         focus_duration: int = 25 * 60,
         rest_duration: int = 5 * 60,
+        long_break_duration: int = 20 * 60,
         num_sessions: int = 2,
+        bg_type: Literal["snow", "matrix", "none"] = "snow"
     ):
         self.stdscr = stdscr
 
         self.focus_duration = focus_duration
         self.rest_duration = rest_duration
-        # session counter
+        self.long_break_duration = long_break_duration
+        self.bg_type = bg_type
+        # session counter 
         self.num_sessions = num_sessions
 
 
@@ -81,6 +85,7 @@ class CursesPomo(object):
         curses.init_pair(1, curses.COLOR_RED, -1)
         curses.init_pair(2, curses.COLOR_CYAN, -1)
         curses.init_pair(3, curses.COLOR_GREEN, -1)
+        curses.init_pair(4, curses.COLOR_WHITE, -1)
 
         self.stdscr.nodelay(True)  # non-blocking input
 
@@ -89,15 +94,24 @@ class CursesPomo(object):
 
         self.run()
 
-    def render_background_random(self, char_set: Literal["matrix", "snow"] = "snow") -> None:
+    def render_background_random(self, *args) -> None:
         # if self.stdscr.getmaxyx()[1] < self.w:
         #     self.dynamic_bg_accumulator = [] # clear cached background if the window has become smaller, as this will fail to render
 
         self.h, self.w = self.stdscr.getmaxyx()  # refresh dims
         bg_h, bg_w = self.h - 1, self.w - 1
 
-        row = random.choices(BACKGROUND_CHARSETS[char_set], k=bg_w)
 
+        match self.bg_type:
+            case "matrix":
+                color = curses.color_pair(3) 
+                charset = "matrix"
+            case "snow":
+                color = curses.color_pair(4)
+                charset = "snow"
+            case "none":
+                return
+        row = random.choices(BACKGROUND_CHARSETS[self.bg_type], k=bg_w)
         if len(self.dynamic_bg_accumulator) > bg_h:
             self.dynamic_bg_accumulator = self.dynamic_bg_accumulator[:-1]
 
@@ -105,7 +119,7 @@ class CursesPomo(object):
 
         try:
             for i, line in enumerate(self.dynamic_bg_accumulator):
-                self.stdscr.addstr(0 + i, 0, "".join(line), curses.color_pair(3))
+                self.stdscr.addstr(0 + i, 0, "".join(line), color)
         except CursesError as e:
             # self.dynamic_bg_accumulator = []
             return
@@ -114,6 +128,9 @@ class CursesPomo(object):
         self,
         display_ascii: str,
         positioning: Literal["center", "topcenter", "topright", "topleft"] = "center",
+        color_pair: int = 0,
+        y_offset: int = 0,
+        x_offset: int = 0,
         *args,
     ) -> None:
 
@@ -136,10 +153,12 @@ class CursesPomo(object):
                 start_y = 0
                 start_x = 0
 
+        start_x, start_y = start_x + x_offset, start_y + y_offset
+
         # write each line to stdscr
         try:
             for i, line in enumerate(display_ascii):
-                self.stdscr.addstr(start_y + i, start_x, line, *args)
+                self.stdscr.addstr(start_y + i, start_x, line, color_pair)
         except CursesError as e:
             pass
 
@@ -159,9 +178,12 @@ class CursesPomo(object):
     def timer_loop(
         self,
         duration: int,
-        text: str,
-        color_pair: int,
+        color_pair: int = 0,
         show_elapsed: bool = False,
+        title_text: str = " ",
+        sub_text: str = " ",
+        body_text: str = " ",
+
     ):
         """
         creates a loop for a timer screen according to set parameters.
@@ -194,14 +216,18 @@ class CursesPomo(object):
                 else:
                     self.stdscr.clear()
                     self.render_ascii_str(
-                        pyfiglet.figlet_format("paused", "small"), "center", color_pair
+                        pyfiglet.figlet_format("paused", "small"),
+                        positioning="center",
+                        color_pair=color_pair
                     )
                     self.stdscr.refresh()
             # `shift + S` skip timer 
             if key == ord("S"):
                 self.stdscr.clear()
                 self.render_ascii_str(
-                    pyfiglet.figlet_format("skipped", "small"), "center", color_pair
+                    pyfiglet.figlet_format("skipped", "small"),
+                    positioning="center",
+                    color_pair=color_pair
                 )
                 self.stdscr.refresh()
                 time.sleep(0.4)
@@ -235,9 +261,11 @@ class CursesPomo(object):
                     # conditional rendering
                     self.render_background_random()
 
-                    self.render_ascii_str(text, "topleft", color_pair)
+                    self.render_ascii_str(title_text, positioning="topleft", color_pair=color_pair)
+                    self.render_ascii_str(sub_text, positioning="topright", color_pair=color_pair)
+                    self.render_ascii_str(body_text, positioning="center", color_pair=color_pair, y_offset=6)
                     self.render_ascii_str(
-                        display_ascii, "center", color_pair | curses.A_BOLD
+                        display_ascii, positioning="center", color_pair=color_pair | curses.A_BOLD
                     )
                     # render progress bar
                     self.render_progress_bar(
@@ -253,24 +281,31 @@ class CursesPomo(object):
 
     def run(self) -> None:
         """Main timer loop"""
+        quote = "'hello' - anonymous"
         curses.curs_set(0)  # hide cursor
 
-        for _ in range(self.num_sessions):
-            try:
+        for i in range(self.num_sessions):
+            # three focus/rest sessions, then a long break
+            ascii_session = pyfiglet.figlet_format(str(i+1)+" ", "small")
+            for _ in range(3): 
                 # Start focus session ----
                 self.timer_loop(
-                    self.focus_duration, FOCUS_TEXT, curses.color_pair(1), self.show_elapsed
+                    self.focus_duration, curses.color_pair(1), self.show_elapsed, FOCUS_TEXT, ascii_session, quote
                 )
                 play_ding()
                 # Start rest ...
                 self.timer_loop(
-                    self.rest_duration, REST_TEXT, curses.color_pair(2), self.show_elapsed
+                    self.rest_duration, curses.color_pair(2), self.show_elapsed, REST_TEXT, ascii_session
                 )
-            except KeyboardInterrupt as e:
-                break
+                play_ding()
+            self.timer_loop(
+                self.focus_duration, curses.color_pair(1), self.show_elapsed, FOCUS_TEXT, ascii_session, quote
+            )
 
-def main(stdscr, focus_duration, rest_duration, num_sessions) -> None:
-    pomo = CursesPomo(stdscr, focus_duration, rest_duration, num_sessions)
+            self.timer_loop(self.long_break_duration, curses.color_pair(3), self.show_elapsed, LB_TEXT, ascii_session)
+            play_ding()
+def main(stdscr, focus_duration, rest_duration, long_break_duration, num_sessions, bg_type) -> None:
+    pomo = CursesPomo(stdscr, focus_duration, rest_duration, long_break_duration, num_sessions, bg_type)
 
 
 if __name__ == "__main__":
@@ -290,10 +325,25 @@ if __name__ == "__main__":
         help="duration of pomodoro rest period in minutes",
     )
     parser.add_argument(
-        "-sessions", type=int, default=4, help="number of focus/rest sessions"
+        "-longbreak",
+        type=float,
+        default=20,
+        help="duration of the final break in a session"
+    )
+    parser.add_argument(
+        "-sessions", type=int, default=4, help="number of sessions, each consisting of 4 pomodoros"
+    )
+    parser.add_argument(
+        "-bg",
+        type=str,
+        default="snow",
+        help="background: can be 'snow', 'matrix', or 'none'."
     )
 
     args = parser.parse_args()
-    curses.wrapper(
-        main, int(args.focus * 60), int(args.rest * 60), args.sessions
-    )
+    try:
+        curses.wrapper(
+            main, int(args.focus * 60), int(args.rest * 60), int(args.longbreak * 60), args.sessions, args.bg 
+        )
+    except KeyboardInterrupt:
+        exit()
