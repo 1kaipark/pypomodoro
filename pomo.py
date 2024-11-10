@@ -180,7 +180,9 @@ class CursesPomo(object):
         force_render = False
 
         while elapsed < duration:  # go until duration is reached
+            # handle keys 
             key = self.stdscr.getch()
+            # `p` pause key
             if key == ord("p"):
                 active = not active
                 if active:
@@ -195,6 +197,7 @@ class CursesPomo(object):
                         pyfiglet.figlet_format("paused", "small"), "center", color_pair
                     )
                     self.stdscr.refresh()
+            # `shift + S` skip timer 
             if key == ord("S"):
                 self.stdscr.clear()
                 self.render_ascii_str(
@@ -203,10 +206,16 @@ class CursesPomo(object):
                 self.stdscr.refresh()
                 time.sleep(0.4)
                 break  # skip this timer
-
+            
+            # `e` to switch elapsed/remaining 
             if key == ord("e"):
                 show_elapsed = not show_elapsed
-
+            
+            # `q` to exit the entire program 
+            if key == ord("q"):
+                exit()
+            
+            # actual timer rendering 
             if active:
                 now = time.time()
                 elapsed = round(now - start, 2)  # update with current time

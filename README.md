@@ -6,10 +6,10 @@
 * keep it a stack i'm too lazy to write this, just do python pomo.py -h
 * hotkeys:
     * `p`: pauses timer
-    * `S`: skips current timer
+    * `shift + S`: skips current timer
     * `e`: switch clock display (time elapsed vs. time remaining)
     * `r`: forces window refresh (usually useless but fun background scrolling)
-    * writing a quit hotkey is a pain in the ass so I just Ctrl+C it lmao
+    * `q`: quit 
 ## todos:
 * make it prettier
     * ASCII bonsaii tree art?
