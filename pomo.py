@@ -4,6 +4,7 @@ import curses
 import argparse
 import random
 import string
+import random 
 
 from playsound import playsound
 from _curses import error as CursesError
@@ -12,6 +13,8 @@ from pathlib import Path
 import threading
 
 from typing import Literal
+
+from shared.quotes import get_quote
 
 FOCUS_TEXT: str = pyfiglet.figlet_format("focus...", "small")
 REST_TEXT: str = pyfiglet.figlet_format("take a break...", "small")
@@ -22,7 +25,11 @@ DEVIOUS_LIST: list[str] = (
     [" "] * 1000 + ["*"] * 2 + ["@", "{", "}", "*", "."]*10 + [c for c in string.ascii_letters]
 )
 
-from logger import log
+# from logger import log
+# def get_quote() -> str:
+#     with open("quotes.txt") as h:
+#         quotes = h.readlines()
+#     return random.choice(quotes) 
 
 def time_fmt(secs: int, display_hours: bool = False) -> str:
     """Returns base-60 time string in format 00:00.00"""
@@ -101,13 +108,13 @@ class CursesPomo(object):
         self.h, self.w = self.stdscr.getmaxyx()  # refresh dims
         bg_h, bg_w = self.h - 1, self.w - 1
 
+        color = curses.color_pair(4)
 
         match self.bg_type:
             case "matrix":
-                color = curses.color_pair(3) 
+                color = curses.color_pair(3)
                 charset = "matrix"
             case "snow":
-                color = curses.color_pair(4)
                 charset = "snow"
             case "none":
                 return
@@ -139,6 +146,8 @@ class CursesPomo(object):
         ascii_height = len(display_ascii)
         ascii_width = max([len(line) for line in display_ascii])
 
+        start_y = 0
+        start_x = 0
         match positioning:
             case "center":
                 start_y = max((self.h - ascii_height) // 2, 0)
@@ -150,8 +159,8 @@ class CursesPomo(object):
                 start_y = 0
                 start_x = max((self.w - ascii_width), 0)
             case "topleft":
-                start_y = 0
-                start_x = 0
+                ...
+
 
         start_x, start_y = start_x + x_offset, start_y + y_offset
 
@@ -183,6 +192,7 @@ class CursesPomo(object):
         title_text: str = " ",
         sub_text: str = " ",
         body_text: str = " ",
+        display_hours: bool = False,
 
     ):
         """
@@ -245,15 +255,18 @@ class CursesPomo(object):
             if active:
                 now = time.time()
                 elapsed = round(now - start, 2)  # update with current time
-                delta += (now - lt) * 15 # delta accumulates time taken by the last loop cycle
+                delta += (now - lt) * 24 # delta accumulates time taken by the last loop cycle
                 # multiply by 15, once delta reaches >= 1, render
                 lt = now
 
                 # convert elapsed time in seconds to ASCII display
+                # display hours conditionally (if time integer is greater than 60 mins)
                 if show_elapsed:
-                    timestamp = time_fmt(elapsed)[:10]
+                    timestamp_sec = elapsed
                 else:
-                    timestamp = time_fmt(round(duration - elapsed, 2) + 1)[:10]
+                    timestamp_sec = round(duration - elapsed, 2) + 1
+                
+                timestamp = time_fmt(timestamp_sec, display_hours=timestamp_sec >= 3600)[:10]
 
                 display_ascii: list[str] = pyfiglet.figlet_format(timestamp, "slant")
 
@@ -281,7 +294,7 @@ class CursesPomo(object):
 
     def run(self) -> None:
         """Main timer loop"""
-        quote = "'hello' - anonymous"
+        quote = get_quote()
         curses.curs_set(0)  # hide cursor
 
         for i in range(self.num_sessions):
@@ -290,7 +303,7 @@ class CursesPomo(object):
             for _ in range(3): 
                 # Start focus session ----
                 self.timer_loop(
-                    self.focus_duration, curses.color_pair(1), self.show_elapsed, FOCUS_TEXT, ascii_session, quote
+                    self.focus_duration, curses.color_pair(1), self.show_elapsed, FOCUS_TEXT, ascii_session, get_quote()
                 )
                 play_ding()
                 # Start rest ...
@@ -299,11 +312,16 @@ class CursesPomo(object):
                 )
                 play_ding()
             self.timer_loop(
-                self.focus_duration, curses.color_pair(1), self.show_elapsed, FOCUS_TEXT, ascii_session, quote
+                self.focus_duration, curses.color_pair(1), self.show_elapsed, FOCUS_TEXT, ascii_session, get_quote()
             )
 
-            self.timer_loop(self.long_break_duration, curses.color_pair(3), self.show_elapsed, LB_TEXT, ascii_session)
+            self.timer_loop(
+                self.long_break_duration, curses.color_pair(3), self.show_elapsed, LB_TEXT, ascii_session
+            )
             play_ding()
+
+
+
 def main(stdscr, focus_duration, rest_duration, long_break_duration, num_sessions, bg_type) -> None:
     pomo = CursesPomo(stdscr, focus_duration, rest_duration, long_break_duration, num_sessions, bg_type)
 
