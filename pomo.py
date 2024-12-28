@@ -217,12 +217,14 @@ class CursesPomo(object):
             # `p` pause key
             if key == ord("p"):
                 active = not active
-                if active:
+                if active: # now active
                     self.stdscr.clear()
                     force_render = True
                     start += time.time() - (
                         start + elapsed
                     )  # grab current time to account for pause time
+                    lt = start
+
                 else:
                     self.stdscr.clear()
                     self.render_ascii_str(
